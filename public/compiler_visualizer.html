@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Compiler Phase Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --surface2: #eef1f7;
+  --border: #dde2ed;
+  --border2: #c4cce0;
+  --text: #1a2035;
+  --text2: #4a5675;
+  --text3: #8a97b5;
+  --accent: #2563eb;
+  --accent2: #6d3fc8;
+  --green: #0e9e6e;
+  --amber: #c07a0a;
+  --red: #dc3545;
+  --pink: #b03a7a;
+  --phase1: #6d3fc8;
+  --phase2: #2563eb;
+  --phase3: #0e9e6e;
+  --phase4: #c07a0a;
+  --phase5: #b03a7a;
+  --phase6: #0891b2;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Space Grotesk', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+
+/* HEADER */
+.header { 
+  padding: 20px 32px; 
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(135deg, rgba(37,99,235,0.04), rgba(109,63,200,0.04));
+}
+.logo { font-size: 11px; font-family: var(--mono); color: var(--accent); letter-spacing: 3px; text-transform: uppercase; }
+.title { font-size: 20px; font-weight: 700; color: var(--text); }
+.title span { color: var(--accent); }
+.badge { margin-left: auto; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); color: var(--accent); font-size: 11px; font-family: var(--mono); padding: 4px 10px; border-radius: 4px; }
+
+/* MAIN LAYOUT */
+.container { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - 65px); }
+
+/* LEFT PANEL */
+.left-panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.input-section { padding: 20px; border-bottom: 1px solid var(--border); }
+.label { font-size: 11px; font-family: var(--mono); color: var(--text3); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; display: block; }
+#code-input { 
+  width: 100%; height: 180px; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--mono); font-size: 13px; padding: 12px;
+  border-radius: 6px; resize: vertical; outline: none; line-height: 1.6;
+  transition: border-color 0.2s;
+}
+#code-input:focus { border-color: var(--accent); }
+.run-btn {
+  margin-top: 12px; width: 100%; padding: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none; color: #fff; font-family: var(--sans); font-weight: 600;
+  font-size: 14px; border-radius: 6px; cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.run-btn:hover { opacity: 0.9; }
+.run-btn:active { transform: scale(0.98); }
+.run-btn .icon { font-size: 16px; }
+
+/* PHASE NAV */
+.phase-nav { padding: 16px; flex: 1; overflow-y: auto; }
+.phase-nav-title { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; }
+.phase-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 6px; cursor: pointer;
+  margin-bottom: 4px; transition: background 0.15s;
+  border: 1px solid transparent;
+}
+.phase-item:hover { background: var(--surface2); }
+.phase-item.active { background: var(--surface2); border-color: var(--border2); }
+.phase-dot { 
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--border2);
+}
+.phase-item.done .phase-dot { background: var(--green); box-shadow: 0 0 6px rgba(14,158,110,0.4); }
+.phase-item.active .phase-dot { background: var(--accent); box-shadow: 0 0 8px rgba(37,99,235,0.4); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+.phase-name { font-size: 13px; font-weight: 500; color: var(--text2); }
+.phase-item.active .phase-name { color: var(--text); }
+.phase-item.done .phase-name { color: var(--text); }
+.phase-num { margin-left: auto; font-size: 10px; font-family: var(--mono); color: var(--text3); }
+
+/* RIGHT PANEL */
+.right-panel { overflow-y: auto; padding: 24px 32px; }
+.phase-view { display: none; animation: fadeIn 0.3s ease; }
+.phase-view.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.phase-header { 
+  display: flex; align-items: center; gap: 16px; 
+  margin-bottom: 28px; padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.phase-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.phase-title { font-size: 22px; font-weight: 700; }
+.phase-subtitle { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.step-badge {
+  margin-left: auto; font-size: 11px; font-family: var(--mono);
+  padding: 4px 10px; border-radius: 4px; border: 1px solid;
+}
+
+/* SECTIONS */
+.section { margin-bottom: 28px; }
+.section-title { 
+  font-size: 11px; font-family: var(--mono); letter-spacing: 2px;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* TABLES */
+.ws-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: var(--mono); }
+.ws-table th { 
+  background: var(--surface2); color: var(--text2); 
+  font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 10px 14px; text-align: left; border: 1px solid var(--border);
+}
+.ws-table td { 
+  padding: 9px 14px; border: 1px solid var(--border);
+  color: var(--text); vertical-align: middle;
+}
+.ws-table tr:nth-child(even) td { background: rgba(0,0,0,0.02); }
+.ws-table tr:hover td { background: rgba(37,99,235,0.04); }
+.tok-type { color: var(--accent2); font-weight: 500; }
+.tok-id { color: var(--green); }
+.tok-num { color: var(--amber); }
+.tok-op { color: var(--pink); }
+.tok-kw { color: var(--accent2); font-weight: 600; }
+.tok-delim { color: var(--phase6); }
+.tok-str { color: var(--green); font-style: italic; }
+.tok-cmt { color: var(--text3); font-style: italic; }
+.tok-pre { color: var(--amber); font-weight: 600; }
+.check-pass { color: var(--green); }
+.check-fail { color: var(--red); }
+.type-int { color: var(--accent); }
+.type-float { color: var(--amber); }
+
+/* CODE BLOCKS */
+.code-block { 
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 16px 20px; font-family: var(--mono);
+  font-size: 13px; line-height: 1.8; white-space: pre;
+  overflow-x: auto;
+}
+.code-line { display: flex; gap: 16px; }
+.line-num { color: var(--text3); min-width: 24px; user-select: none; }
+.line-code { color: var(--text); }
+.line-code .kw { color: var(--accent2); }
+.line-code .id { color: var(--green); }
+.line-code .num { color: var(--amber); }
+.line-code .op { color: var(--pink); }
+.line-code .tmp { color: var(--pink); font-style: italic; }
+.line-code .reg { color: var(--accent); }
+.line-code .cmt { color: var(--text3); }
+
+/* PARSE TREE SVG */
+.tree-container {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; overflow-x: auto; min-height: 200px;
+}
+.tree-container svg { display: block; margin: 0 auto; }
+
+/* GRAMMAR RULES */
+.grammar-rule {
+  background: var(--surface2); border-left: 3px solid var(--accent2);
+  padding: 8px 14px; margin-bottom: 6px; border-radius: 0 4px 4px 0;
+  font-family: var(--mono); font-size: 13px; color: var(--text);
+}
+.grammar-rule .nt { color: var(--accent); font-weight: 500; }
+.grammar-rule .arrow { color: var(--text3); margin: 0 8px; }
+.grammar-rule .prod { color: var(--text2); }
+
+/* SEMANTIC CHECKS */
+.check-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: 6px; margin-bottom: 6px; font-size: 13px;
+}
+.check-label { color: var(--text2); }
+.check-result { font-family: var(--mono); font-weight: 500; font-size: 12px; padding: 3px 8px; border-radius: 3px; }
+.check-result.pass { background: rgba(14,158,110,0.1); color: var(--green); }
+.check-result.fail { background: rgba(220,53,69,0.1); color: var(--red); }
+.check-result.na { background: rgba(138,151,181,0.1); color: var(--text3); }
+
+/* ERROR TABLE */
+.error-row td { font-size: 12px; }
+.error-type { color: var(--accent); font-weight: 500; }
+.error-example { color: var(--amber); font-family: var(--mono); }
+.error-fix { color: var(--green); }
+
+/* WELCOME */
+.welcome { 
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 60vh; text-align: center; gap: 16px;
+}
+.welcome-icon { font-size: 56px; opacity: 0.3; }
+.welcome-title { font-size: 24px; font-weight: 700; color: var(--text2); }
+.welcome-sub { font-size: 14px; color: var(--text3); max-width: 380px; line-height: 1.6; }
+
+/* ANNOTATED TREE */
+.annotated-line {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 6px 0; font-family: var(--mono); font-size: 13px;
+}
+.at-indent { color: var(--text3); }
+.at-node { color: var(--text); }
+.at-type { color: var(--accent2); font-size: 11px; padding: 2px 6px; background: rgba(109,63,200,0.08); border-radius: 3px; }
+
+/* NAV ARROWS */
+.nav-buttons { display: flex; gap: 10px; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); }
+.nav-btn {
+  padding: 10px 20px; border-radius: 6px; font-family: var(--sans);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--border2); background: var(--surface); color: var(--text2);
+  transition: all 0.15s;
+}
+.nav-btn:hover { background: var(--surface2); color: var(--text); }
+.nav-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.nav-btn.primary:hover { opacity: 0.85; }
+.nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* OPTIMIZATION DIFF */
+.opt-before { color: var(--red); text-decoration: line-through; opacity: 0.7; }
+.opt-after { color: var(--green); }
+.opt-unchanged { color: var(--text2); }
+.opt-note { font-size: 11px; color: var(--text3); margin-left: 8px; font-style: italic; }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* INFO CARDS */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.info-card { 
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 12px 14px;
+}
+.info-card-label { font-size: 10px; font-family: var(--mono); color: var(--text3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px; }
+.info-card-value { font-size: 18px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">◈ compiler lab</div>
+    <div class="title">Phase <span>Visualizer</span></div>
+  </div>
+  <div class="badge">6 PHASES</div>
+</div>
+
+<div class="container">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="input-section">
+      <span class="label">Input Code</span>
+      <textarea id="code-input" spellcheck="false">a = 10
+b = 20
+c = a + b
+d = c * 2
+e = d - 5</textarea>
+      <button class="run-btn" onclick="runCompiler()">
+        <span class="icon">▶</span> Compile &amp; Visualize
+      </button>
+    </div>
+    <div class="phase-nav">
+      <div class="phase-nav-title">Pipeline Phases</div>
+      <div class="phase-item" id="nav-1" onclick="showPhase(1)">
+        <div class="phase-dot"></div>
+        <span class="phase-name">Lexical Analysis</span>
+        <span class="phase-num">01</span>
+      </div>
+      <div class="phase-item" id="nav-2" onclick="showPhase(2)">
+        <div class="phase-dot"></div>
+        <span class="phase-name">Syntax Analysis</span>
+        <span class="phase-num">02</span>
+      </div>
+      <div class="phase-item" id="nav-3" onclick="showPhase(3)">
+        <div class="phase-dot"></div>
+        <span class="phase-name">Semantic Analysis</span>
+        <span class="phase-num">03</span>
+      </div>
+      <div class="phase-item" id="nav-4" onclick="showPhase(4)">
+        <div class="phase-dot"></div>
+        <span class="phase-name">Intermediate Code</span>
+        <span class="phase-num">04</span>
+      </div>
+      <div class="phase-item" id="nav-5" onclick="showPhase(5)">
+        <div class="phase-dot"></div>
+        <span class="phase-name">Code Optimization</span>
+        <span class="phase-num">05</span>
+      </div>
+      <div class="phase-item" id="nav-6" onclick="showPhase(6)">
+        <div class="phase-dot"></div>
+        <span class="phase-name">Target Code</span>
+        <span class="phase-num">06</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel" id="right-panel">
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">⚙</div>
+      <div class="welcome-title">Enter code and compile</div>
+      <div class="welcome-sub">All 6 compiler phases will be visualized with worksheet-format output matching your PDF template.</div>
+    </div>
+
+    <!-- PHASE 1: LEXICAL -->
+    <div class="phase-view" id="phase-1">
+      <div class="phase-header">
+        <div class="phase-icon" style="background:rgba(124,92,252,0.15)">🔤</div>
+        <div>
+          <div class="phase-title" style="color:var(--phase1)">Lexical Analysis</div>
+          <div class="phase-subtitle">Converts source characters into tokens</div>
+        </div>
+        <div class="step-badge" style="color:var(--phase1);border-color:rgba(124,92,252,0.3)">PHASE 01</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Token + Lexeme Table</div>
+        <div id="p1-tokens"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Symbol Table — Lexical Phase (identifiers only)</div>
+        <div id="p1-symtable"></div>
+      </div>
+
+      <div id="p1-nav" class="nav-buttons">
+        <button class="nav-btn primary" onclick="showPhase(2)">Next: Syntax Analysis →</button>
+      </div>
+    </div>
+
+    <!-- PHASE 2: SYNTAX -->
+    <div class="phase-view" id="phase-2">
+      <div class="phase-header">
+        <div class="phase-icon" style="background:rgba(79,142,247,0.15)">🌲</div>
+        <div>
+          <div class="phase-title" style="color:var(--phase2)">Syntax Analysis</div>
+          <div class="phase-subtitle">Validates grammar and builds parse tree</div>
+        </div>
+        <div class="step-badge" style="color:var(--phase2);border-color:rgba(79,142,247,0.3)">PHASE 02</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Grammar Rules Used</div>
+        <div id="p2-grammar"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Parse Tree</div>
+        <div class="tree-container" id="p2-tree"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="nav-btn" onclick="showPhase(1)">← Back</button>
+        <button class="nav-btn primary" onclick="showPhase(3)">Next: Semantic Analysis →</button>
+      </div>
+    </div>
+
+    <!-- PHASE 3: SEMANTIC -->
+    <div class="phase-view" id="phase-3">
+      <div class="phase-header">
+        <div class="phase-icon" style="background:rgba(45,212,160,0.15)">🔍</div>
+        <div>
+          <div class="phase-title" style="color:var(--phase3)">Semantic Analysis</div>
+          <div class="phase-subtitle">Type checking, scope, and validity</div>
+        </div>
+        <div class="step-badge" style="color:var(--phase3);border-color:rgba(45,212,160,0.3)">PHASE 03</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Symbol Table — Before Semantic Analysis</div>
+        <div id="p3-symtable-before"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Semantic Checks Performed</div>
+        <div id="p3-checks"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Symbol Table — After Semantic Analysis</div>
+        <div id="p3-symtable-after"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Annotated (Typed) Syntax Tree</div>
+        <div class="code-block" id="p3-annotated" style="white-space:pre-line;line-height:1.9"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="nav-btn" onclick="showPhase(2)">← Back</button>
+        <button class="nav-btn primary" onclick="showPhase(4)">Next: Intermediate Code →</button>
+      </div>
+    </div>
+
+    <!-- PHASE 4: ICG -->
+    <div class="phase-view" id="phase-4">
+      <div class="phase-header">
+        <div class="phase-icon" style="background:rgba(245,166,35,0.15)">🔧</div>
+        <div>
+          <div class="phase-title" style="color:var(--phase4)">Intermediate Code Generation</div>
+          <div class="phase-subtitle">Three-address code with temporary variables</div>
+        </div>
+        <div class="step-badge" style="color:var(--phase4);border-color:rgba(245,166,35,0.3)">PHASE 04</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Three-Address Code (TAC)</div>
+        <div class="code-block" id="p4-tac"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Triple Representation</div>
+        <div id="p4-triple"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Indirect Triple Representation</div>
+        <div id="p4-indirect-triple"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Quadruple Representation</div>
+        <div id="p4-quadruple"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Temporary Variables Introduced</div>
+        <div id="p4-temps"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Symbol Table — After ICG</div>
+        <div id="p4-symtable"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="nav-btn" onclick="showPhase(3)">← Back</button>
+        <button class="nav-btn primary" onclick="showPhase(5)">Next: Optimization →</button>
+      </div>
+    </div>
+
+    <!-- PHASE 5: OPTIMIZE -->
+    <div class="phase-view" id="phase-5">
+      <div class="phase-header">
+        <div class="phase-icon" style="background:rgba(240,106,171,0.15)">⚡</div>
+        <div>
+          <div class="phase-title" style="color:var(--phase5)">Code Optimization</div>
+          <div class="phase-subtitle">Eliminate redundancies and reduce temporaries</div>
+        </div>
+        <div class="step-badge" style="color:var(--phase5);border-color:rgba(240,106,171,0.3)">PHASE 05</div>
+      </div>
+
+      <div class="info-grid" id="p5-stats"></div>
+
+      <div class="section">
+        <div class="section-title">Optimized Code (Before → After)</div>
+        <div class="code-block" id="p5-diff" style="white-space:pre-line;line-height:2"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Symbol Table — After Optimization</div>
+        <div id="p5-symtable"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="nav-btn" onclick="showPhase(4)">← Back</button>
+        <button class="nav-btn primary" onclick="showPhase(6)">Next: Target Code →</button>
+      </div>
+    </div>
+
+    <!-- PHASE 6: TARGET -->
+    <div class="phase-view" id="phase-6">
+      <div class="phase-header">
+        <div class="phase-icon" style="background:rgba(92,238,204,0.15)">🖥</div>
+        <div>
+          <div class="phase-title" style="color:var(--phase6)">Target Code Generation</div>
+          <div class="phase-subtitle">Register-based machine instructions</div>
+        </div>
+        <div class="step-badge" style="color:var(--phase6);border-color:rgba(92,238,204,0.3)">PHASE 06</div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Final Target Code</div>
+        <div class="code-block" id="p6-code"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Compiler Phase Error Summary</div>
+        <div id="p6-errors"></div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="nav-btn" onclick="showPhase(5)">← Back</button>
+        <button class="nav-btn primary" onclick="runCompiler()">↺ Recompile</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  LEXER
+// ============================================================
+const TOKEN_RULES = [
+  // Literals (longest match first)
+  { type: 'FLOAT_NUM',    re: /^\d+\.\d+([eE][+-]?\d+)?[fFlL]?/ },
+  { type: 'NUMBER',       re: /^\d+[uUlL]*/ },
+  { type: 'STRING',       re: /^"(?:[^"\\]|\\.)*"/ },
+  { type: 'CHAR_LIT',     re: /^'(?:[^'\\]|\\.)+'/ },
+  // Identifiers / keywords matched as ID, reclassified later
+  { type: 'ID',           re: /^[a-zA-Z_][a-zA-Z_0-9]*/ },
+  // Compound operators (must come before single-char)
+  { type: 'INC',          re: /^\+\+/ },
+  { type: 'DEC',          re: /^--/ },
+  { type: 'ADD_ASSIGN',   re: /^\+=/ },
+  { type: 'SUB_ASSIGN',   re: /^-=/ },
+  { type: 'MUL_ASSIGN',   re: /^\*=/ },
+  { type: 'DIV_ASSIGN',   re: /^\/=/ },
+  { type: 'MOD_ASSIGN',   re: /^%=/ },
+  { type: 'EQ',           re: /^==/ },
+  { type: 'NEQ',          re: /^!=/ },
+  { type: 'LEQ',          re: /^<=/ },
+  { type: 'GEQ',          re: /^>=/ },
+  { type: 'AND',          re: /^&&/ },
+  { type: 'OR',           re: /^\|\|/ },
+  { type: 'ARROW',        re: /^->/ },
+  { type: 'ELLIPSIS',     re: /^\.\.\./ },
+  // Single-char operators
+  { type: 'PLUS',         re: /^\+/ },
+  { type: 'MINUS',        re: /^-/ },
+  { type: 'TIMES',        re: /^\*/ },
+  { type: 'DIVIDE',       re: /^\// },
+  { type: 'PERCENT',      re: /^%/ },
+  { type: 'EQUALS',       re: /^=/ },
+  { type: 'LT',           re: /^</ },
+  { type: 'GT',           re: /^>/ },
+  { type: 'NOT',          re: /^!/ },
+  { type: 'AMPERSAND',    re: /^&/ },
+  { type: 'PIPE',         re: /^\|/ },
+  { type: 'TILDE',        re: /^~/ },
+  { type: 'CARET',        re: /^\^/ },
+  { type: 'QUESTION',     re: /^\?/ },
+  { type: 'COLON',        re: /^:/ },
+  { type: 'DOT',          re: /^\./ },
+  { type: 'HASH',         re: /^#/ },
+  // Delimiters
+  { type: 'LPAREN',       re: /^\(/ },
+  { type: 'RPAREN',       re: /^\)/ },
+  { type: 'LBRACE',       re: /^\{/ },
+  { type: 'RBRACE',       re: /^\}/ },
+  { type: 'LBRACKET',     re: /^\[/ },
+  { type: 'RBRACKET',     re: /^\]/ },
+  { type: 'SEMICOLON',    re: /^;/ },
+  { type: 'COMMA',        re: /^,/ },
+];
+
+const TOKEN_DISPLAY_MAP = {
+  // Literals
+  'NUMBER':       'Integer Literal',
+  'FLOAT_NUM':    'Float Literal',
+  'STRING':       'String Literal',
+  'CHAR_LIT':     'Character Literal',
+  // Identifiers
+  'ID':           'Identifier',
+  'KEYWORD':      'Keyword',
+  // Preprocessor
+  'HASH':         'Preprocessor Directive (#)',
+  'LINE_COMMENT': 'Line Comment',
+  'BLOCK_COMMENT':'Block Comment',
+  // Arithmetic operators
+  'PLUS':         'Addition Operator',
+  'MINUS':        'Subtraction Operator',
+  'TIMES':        'Multiplication Operator',
+  'DIVIDE':       'Division Operator',
+  'PERCENT':      'Modulo Operator',
+  // Assignment operators
+  'EQUALS':       'Assignment Operator',
+  'ADD_ASSIGN':   'Add-Assign Operator (+=)',
+  'SUB_ASSIGN':   'Subtract-Assign Operator (-=)',
+  'MUL_ASSIGN':   'Multiply-Assign Operator (*=)',
+  'DIV_ASSIGN':   'Divide-Assign Operator (/=)',
+  'MOD_ASSIGN':   'Modulo-Assign Operator (%=)',
+  // Comparison operators
+  'EQ':           'Equality Operator (==)',
+  'NEQ':          'Not-Equal Operator (!=)',
+  'LT':           'Less-Than Operator',
+  'GT':           'Greater-Than Operator',
+  'LEQ':          'Less-Than-or-Equal Operator (<=)',
+  'GEQ':          'Greater-Than-or-Equal Operator (>=)',
+  // Logical / bitwise
+  'AND':          'Logical AND Operator (&&)',
+  'OR':           'Logical OR Operator (||)',
+  'NOT':          'Logical NOT Operator (!)',
+  'AMPERSAND':    'Address-Of / Bitwise AND Operator (&)',
+  'PIPE':         'Bitwise OR Operator (|)',
+  'TILDE':        'Bitwise NOT Operator (~)',
+  'CARET':        'Bitwise XOR Operator (^)',
+  // Increment / decrement
+  'INC':          'Increment Operator (++)',
+  'DEC':          'Decrement Operator (--)',
+  // Other operators
+  'ARROW':        'Pointer Member Operator (->)',
+  'DOT':          'Member Access Operator (.)',
+  'ELLIPSIS':     'Ellipsis (...)',
+  'QUESTION':     'Ternary Operator (?)',
+  'COLON':        'Colon (:)',
+  // Delimiters
+  'LPAREN':       'Left Parenthesis',
+  'RPAREN':       'Right Parenthesis',
+  'LBRACE':       'Left Brace ({)',
+  'RBRACE':       'Right Brace (})',
+  'LBRACKET':     'Left Bracket ([)',
+  'RBRACKET':     'Right Bracket (])',
+  'SEMICOLON':    'Statement Terminator (;)',
+  'COMMA':        'Comma Separator',
+  // Error
+  'ERROR':        'Unknown Token',
+};
+
+// C keywords — IDs matching these are reclassified as KEYWORD
+const C_KEYWORDS = new Set([
+  'auto','break','case','char','const','continue','default','do','double',
+  'else','enum','extern','float','for','goto','if','inline','int','long',
+  'register','restrict','return','short','signed','sizeof','static','struct',
+  'switch','typedef','union','unsigned','void','volatile','while',
+  'include','define','ifdef','ifndef','endif','pragma',
+  'NULL','true','false','printf','scanf','main',
+]);
+
+function tokenize(src) {
+  const tokens = [];
+
+  // ── Pre-pass: strip block comments (preserve newlines for line counting)
+  src = src.replace(/\/\*[\s\S]*?\*\//g, m => {
+    const lines = m.split('\n');
+    return lines.map((l, i) => i === 0 ? ' '.repeat(l.length) : ' '.repeat(l.length)).join('\n');
+  });
+
+  const lines = src.split('\n');
+  for (let lineno = 0; lineno < lines.length; lineno++) {
+    let line = lines[lineno];
+    let col = 0;
+
+    // ── Line comment: emit a single token and consume rest of line
+    const lcMatch = /^(.*?)(\/\/.*)$/.exec(line);
+    if (lcMatch) {
+      line = lcMatch[1];             // tokenize only the part before //
+      const cmtStart = lcMatch[1].length + 1;
+      tokens.push({ type: 'LINE_COMMENT', value: lcMatch[2], line: lineno + 1, col: cmtStart });
+    }
+
+    while (col < line.length) {
+      const ch = line[col];
+      if (ch === ' ' || ch === '\t') { col++; continue; }
+
+      let matched = false;
+      for (const rule of TOKEN_RULES) {
+        const m = rule.re.exec(line.slice(col));
+        if (m) {
+          let type = rule.type;
+          let val  = m[0];
+
+          // ── Numeric coercion
+          if (type === 'NUMBER')    val = parseInt(val);
+          else if (type === 'FLOAT_NUM') val = parseFloat(val);
+
+          // ── Reclassify identifiers that are C keywords
+          if (type === 'ID' && C_KEYWORDS.has(val)) type = 'KEYWORD';
+
+          tokens.push({ type, value: val, line: lineno + 1, col: col + 1 });
+          col += m[0].length;
+          matched = true;
+          break;
+        }
+      }
+
+      if (!matched) {
+        tokens.push({ type: 'ERROR', value: ch, line: lineno + 1, col: col + 1 });
+        col++;
+      }
+    }
+    tokens.push({ type: 'NEWLINE', value: '\\n', line: lineno + 1, col: 0 });
+  }
+  return tokens;
+}
+
+// ============================================================
+//  PARSER — produces AST
+// ============================================================
+class Parser {
+  constructor(tokens) {
+    const SKIP = new Set(['NEWLINE','ERROR','LINE_COMMENT','BLOCK_COMMENT',
+                          'KEYWORD','SEMICOLON','LBRACE','RBRACE','HASH']);
+    this.tokens = tokens.filter(t => !SKIP.has(t.type));
+    this.pos = 0;
+    this.stmts = [];
+    this.errors = [];
+    this.lineGroups = this._groupByLine(tokens);
+  }
+  _groupByLine(tokens) {
+    const SKIP = new Set(['ERROR','LINE_COMMENT','BLOCK_COMMENT',
+                          'KEYWORD','SEMICOLON','LBRACE','RBRACE','HASH']);
+    const g = {};
+    let cur = [];
+    for (const t of tokens) {
+      if (t.type === 'NEWLINE') {
+        if (cur.length) { g[cur[0].line] = cur; cur = []; }
+      } else if (!SKIP.has(t.type)) cur.push(t);
+    }
+    if (cur.length) g[cur[0].line] = cur;
+    return g;
+  }
+  peek() { return this.tokens[this.pos]; }
+  consume(type) {
+    const t = this.tokens[this.pos];
+    if (!t || (type && t.type !== type)) { this.errors.push(`Expected ${type} got ${t ? t.type : 'EOF'}`); return null; }
+    this.pos++; return t;
+  }
+  parseAll() {
+    for (const [line, toks] of Object.entries(this.lineGroups)) {
+      const saved = this.pos;
+      this.tokens = toks; this.pos = 0;
+      const stmt = this.parseStatement();
+      if (stmt) this.stmts.push({ ...stmt, line: parseInt(line) });
+    }
+    return this.stmts;
+  }
+  parseStatement() {
+    const id = this.peek();
+    if (!id || id.type !== 'ID') return null;
+    const next = this.tokens[this.pos + 1];
+    if (next && next.type === 'EQUALS') {
+      this.consume('ID'); this.consume('EQUALS');
+      const expr = this.parseExpr(0);
+      return { kind: 'assign', name: id.value, expr };
+    }
+    return null;
+  }
+  parseExpr(prec) {
+    let left = this.parsePrimary();
+    const OPS = { 'PLUS':1,'MINUS':1,'TIMES':2,'DIVIDE':2 };
+    while (true) {
+      const op = this.peek();
+      if (!op || !OPS[op.type] || OPS[op.type] <= prec) break;
+      this.pos++;
+      const right = this.parseExpr(OPS[op.type]);
+      left = { kind: 'binop', op: op.value, left, right };
+    }
+    return left;
+  }
+  parsePrimary() {
+    const t = this.peek();
+    if (!t) return { kind: 'num', value: 0 };
+    if (t.type === 'NUMBER' || t.type === 'FLOAT_NUM') { this.pos++; return { kind: 'num', value: t.value }; }
+    if (t.type === 'ID') { this.pos++; return { kind: 'id', name: t.value }; }
+    if (t.type === 'LPAREN') {
+      this.pos++;
+      const e = this.parseExpr(0);
+      this.consume('RPAREN');
+      return e;
+    }
+    this.pos++; return { kind: 'num', value: 0 };
+  }
+}
+
+// ============================================================
+//  SEMANTIC ANALYSIS
+// ============================================================
+function semanticAnalysis(stmts) {
+  const symTable = {};
+  const errors = [];
+  const checks = {
+    'All identifiers declared before use': true,
+    'Operands type compatible for +': true,
+    'Operands type compatible for -': true,
+    'Operands type compatible for *': true,
+    'Operands type compatible for /': true,
+    'RHS type assignable to LHS': true,
+    'Division / mod by zero detected': false,
+  };
+
+  function getType(node) {
+    if (node.kind === 'num') return typeof node.value === 'float' || String(node.value).includes('.') ? 'FLOAT' : 'INT';
+    if (node.kind === 'id') {
+      if (!symTable[node.name]) { errors.push(`Undeclared variable '${node.name}'`); checks['All identifiers declared before use'] = false; return 'INT'; }
+      return symTable[node.name].type;
+    }
+    if (node.kind === 'binop') {
+      const lt = getType(node.left); const rt = getType(node.right);
+      if (node.op === '/' || node.op === '*' || node.op === '+' || node.op === '-') {
+        if (node.op === '/') {
+          if (node.right.kind === 'num' && node.right.value === 0) {
+            errors.push('Division by zero'); checks['Division / mod by zero detected'] = true;
+          }
+        }
+        return (lt === 'FLOAT' || rt === 'FLOAT') ? 'FLOAT' : 'INT';
+      }
+      return 'INT';
+    }
+    return 'INT';
+  }
+
+  const annotated = [];
+  for (const stmt of stmts) {
+    const type = getType(stmt.expr);
+    symTable[stmt.name] = { type, scope: 'Global', address: `0x${(Object.keys(symTable).length * 4).toString(16).padStart(4,'0').toUpperCase()}`, line: stmt.line };
+    annotated.push({ ...stmt, resolvedType: type });
+  }
+  return { symTable, errors, checks, annotated };
+}
+
+// ============================================================
+//  ICG — Three Address Code
+// ============================================================
+function generateICG(stmts) {
+  let tempCount = 0;
+  const tac = [];
+  const temps = {};
+
+  function newTemp() { const t = `t${++tempCount}`; temps[t] = null; return t; }
+
+  function emit(result, op, arg1, arg2) {
+    tac.push({ result, op, arg1, arg2: arg2 || null });
+    return result;
+  }
+
+  function genExpr(node) {
+    if (node.kind === 'num') return String(node.value);
+    if (node.kind === 'id') return node.name;
+    if (node.kind === 'binop') {
+      const l = genExpr(node.left);
+      const r = genExpr(node.right);
+      const t = newTemp();
+      emit(t, node.op, l, r);
+      return t;
+    }
+  }
+
+  for (const stmt of stmts) {
+    const res = genExpr(stmt.expr);
+    if (res !== stmt.name) emit(stmt.name, '=', res, null);
+    else emit(stmt.name, '=', res, null);
+  }
+
+  return { tac, temps };
+}
+
+// ============================================================
+//  OPTIMIZATION
+// ============================================================
+function optimize(tac) {
+  let code = JSON.parse(JSON.stringify(tac));
+  const log = [];
+
+  // 1. Copy propagation: x = t1 where t1 was assigned from something
+  const defs = {};
+  for (const instr of code) {
+    if (!instr.op || instr.op === '=') defs[instr.result] = instr.arg1;
+  }
+
+  // 2. Eliminate copy assignments: x = t1, use -> x = expr directly
+  const copyMap = {};
+  const newCode = [];
+  for (const instr of code) {
+    if (instr.op === '=' && !instr.arg2) {
+      // This is a copy: result = arg1
+      copyMap[instr.result] = instr.arg1;
+      log.push({ type: 'copy', from: `${instr.result} = ${instr.arg1}`, to: '(eliminated copy)' });
+    } else {
+      // Replace args with propagated values
+      let a1 = copyMap[instr.arg1] || instr.arg1;
+      let a2 = instr.arg2 ? (copyMap[instr.arg2] || instr.arg2) : instr.arg2;
+      newCode.push({ ...instr, arg1: a1, arg2: a2 });
+    }
+  }
+
+  // 3. Constant folding: t1 = 3 + 4 -> t1 = 7
+  const folded = [];
+  const constMap = {};
+  for (const instr of newCode) {
+    let a1 = constMap[instr.arg1] !== undefined ? constMap[instr.arg1] : instr.arg1;
+    let a2 = instr.arg2 !== null ? (constMap[instr.arg2] !== undefined ? constMap[instr.arg2] : instr.arg2) : null;
+    const n1 = parseFloat(a1); const n2 = parseFloat(a2);
+    if (!isNaN(n1) && !isNaN(n2) && instr.op && instr.op !== '=') {
+      let res;
+      if (instr.op === '+') res = n1 + n2;
+      else if (instr.op === '-') res = n1 - n2;
+      else if (instr.op === '*') res = n1 * n2;
+      else if (instr.op === '/') res = n1 / n2;
+      if (res !== undefined) {
+        constMap[instr.result] = res;
+        log.push({ type: 'fold', from: `${instr.result} = ${a1} ${instr.op} ${a2}`, to: `${instr.result} = ${res}` });
+        folded.push({ result: instr.result, op: '=', arg1: String(res), arg2: null });
+        continue;
+      }
+    }
+    if (!isNaN(n1) && instr.op === '=') constMap[instr.result] = n1;
+    folded.push({ ...instr, arg1: a1, arg2: a2 });
+  }
+
+  return { optimized: folded, log };
+}
+
+// ============================================================
+//  TARGET CODE GENERATION
+// ============================================================
+function generateTarget(optimized) {
+  const instructions = [];
+  let regCount = 0;
+  const regMap = {};
+
+  function getReg(name) {
+    if (!regMap[name]) { regMap[name] = `R${regCount++}`; }
+    return regMap[name];
+  }
+
+  const OP_MAP = { '+': 'ADD', '-': 'SUB', '*': 'MUL', '/': 'DIV' };
+
+  for (const instr of optimized) {
+    const a1 = instr.arg1; const a2 = instr.arg2;
+    if (instr.op === '=' && !a2) {
+      const reg = getReg(instr.result);
+      const isConst = !isNaN(parseFloat(a1)) && isFinite(a1);
+      instructions.push({ op: isConst ? 'MOVI' : 'MOV', dest: reg, src: a1, comment: `${instr.result} ← ${a1}` });
+    } else if (OP_MAP[instr.op]) {
+      const r1 = getReg(instr.result);
+      const isConst1 = !isNaN(parseFloat(a1)) && isFinite(a1);
+      const isConst2 = !isNaN(parseFloat(a2)) && isFinite(a2);
+      instructions.push({ op: isConst1 ? 'MOVI' : 'MOV', dest: r1, src: a1, comment: `load ${a1}` });
+      const src2 = isConst2 ? a2 : getReg(a2);
+      instructions.push({ op: OP_MAP[instr.op] + (isConst2 ? 'I' : ''), dest: r1, src: src2, comment: `${instr.result} = ${a1} ${instr.op} ${a2}` });
+      instructions.push({ op: 'STR', dest: instr.result, src: r1, comment: `store ${instr.result}` });
+    }
+  }
+  return instructions;
+}
+
+// ============================================================
+//  RENDER HELPERS
+// ============================================================
+function tokenClass(type) {
+  if (type === 'KEYWORD')                               return 'tok-kw';
+  if (type === 'ID')                                    return 'tok-id';
+  if (type === 'NUMBER' || type === 'FLOAT_NUM')        return 'tok-num';
+  if (type === 'STRING' || type === 'CHAR_LIT')         return 'tok-str';
+  if (type === 'LINE_COMMENT' || type === 'BLOCK_COMMENT') return 'tok-cmt';
+  if (type === 'HASH')                                  return 'tok-pre';
+  if (['LBRACE','RBRACE','LBRACKET','RBRACKET',
+       'LPAREN','RPAREN','SEMICOLON','COMMA'].includes(type)) return 'tok-delim';
+  if (['PLUS','MINUS','TIMES','DIVIDE','PERCENT','EQUALS',
+       'EQ','NEQ','LT','GT','LEQ','GEQ','AND','OR','NOT',
+       'AMPERSAND','PIPE','TILDE','CARET','INC','DEC',
+       'ADD_ASSIGN','SUB_ASSIGN','MUL_ASSIGN','DIV_ASSIGN','MOD_ASSIGN',
+       'ARROW','DOT','QUESTION','COLON','ELLIPSIS'].includes(type)) return 'tok-op';
+  return 'tok-type';
+}
+
+function renderTable(headers, rows) {
+  if (!rows.length) return '<p style="color:var(--text3);font-size:13px;font-family:var(--mono)">No entries.</p>';
+  let html = '<table class="ws-table"><thead><tr>';
+  headers.forEach(h => html += `<th>${h}</th>`);
+  html += '</tr></thead><tbody>';
+  rows.forEach(row => {
+    html += '<tr>';
+    row.forEach((cell, i) => html += `<td>${cell}</td>`);
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function drawParseTree(stmts) {
+  if (!stmts.length) return '<p style="color:var(--text3);font-family:var(--mono);font-size:13px">No statements parsed.</p>';
+
+  // Node types matching reference image:
+  // = root:  blue ellipse (light blue fill, blue border)
+  // ID leaf: green ellipse (green fill)
+  // num leaf: white/cream ellipse (light yellow fill)
+  // operator: light yellow/cream ellipse
+  // NODE_RX, NODE_RY = ellipse radii
+  const RX = 28, RY = 20;
+  const LEVEL_H = 80;
+  const MIN_SEP = 72; // min horizontal separation between sibling nodes
+
+  // Build tree structure per statement, each as independent subtree
+  // Returns a tree node object: { label, kind, children, id, x, y }
+  let nid = 0;
+  function makeNode(label, kind) { return { label, kind, children: [], id: nid++, x: 0, y: 0 }; }
+
+  function buildTree(stmt) {
+    const root = makeNode('=', 'assign');
+    const lhs = makeNode(stmt.name, 'id');
+    const rhs = buildExprNode(stmt.expr);
+    root.children = [lhs, rhs];
+    return root;
+  }
+
+  function buildExprNode(node) {
+    if (node.kind === 'num') return makeNode(String(node.value), 'num');
+    if (node.kind === 'id') return makeNode(node.name, 'id');
+    if (node.kind === 'binop') {
+      const n = makeNode(node.op, 'op');
+      n.children = [buildExprNode(node.left), buildExprNode(node.right)];
+      return n;
+    }
+    return makeNode('?', 'num');
+  }
+
+  // Compute subtree widths bottom-up, then assign x positions (Reingold-Tilford simplified)
+  function computeWidth(node) {
+    if (!node.children.length) { node.w = MIN_SEP; return; }
+    node.children.forEach(computeWidth);
+    node.w = Math.max(node.children.reduce((s, c) => s + c.w, 0), MIN_SEP);
+  }
+
+  function assignPos(node, xCenter, depth) {
+    node.x = xCenter;
+    node.y = depth * LEVEL_H + RY + 20;
+    if (!node.children.length) return;
+    let startX = xCenter - node.w / 2;
+    for (const c of node.children) {
+      assignPos(c, startX + c.w / 2, depth + 1);
+      startX += c.w;
+    }
+  }
+
+  // Build all statement trees, lay them out side by side
+  const trees = stmts.map(s => buildTree(s));
+  trees.forEach(t => computeWidth(t));
+
+  // Arrange trees horizontally with gap
+  const GAP = 60;
+  let totalW = trees.reduce((s, t) => s + t.w, 0) + GAP * (trees.length - 1);
+  totalW = Math.max(totalW, 300);
+  let curX = 0;
+  trees.forEach(t => {
+    assignPos(t, curX + t.w / 2, 0);
+    curX += t.w + GAP;
+  });
+
+  // Find total height
+  let maxY = 0;
+  function walkY(n) { maxY = Math.max(maxY, n.y); n.children.forEach(walkY); }
+  trees.forEach(walkY);
+  const svgH = maxY + RY + 30;
+
+  // Collect all nodes and edges
+  const allNodes = []; const allEdges = [];
+  function collect(n) {
+    allNodes.push(n);
+    n.children.forEach(c => { allEdges.push([n, c]); collect(c); });
+  }
+  trees.forEach(collect);
+
+  // Node colors matching reference image
+  function nodeStyle(kind) {
+    if (kind === 'assign') return { fill: '#b8d8f0', stroke: '#5aa0c8', text: '#1a4a6e' }; // blue ellipse
+    if (kind === 'id')     return { fill: '#7ecf8e', stroke: '#3a9a52', text: '#1a4a25' }; // green ellipse
+    if (kind === 'num')    return { fill: '#f5f0d8', stroke: '#c8b86a', text: '#5a4a10' }; // cream ellipse
+    if (kind === 'op')     return { fill: '#f5f0d8', stroke: '#c8b86a', text: '#5a4a10' }; // cream ellipse (operators)
+    return { fill: '#e0e0e0', stroke: '#999', text: '#333' };
+  }
+
+  let svg = `<svg width="${totalW}" height="${svgH}" viewBox="0 0 ${totalW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="font-family:'Space Grotesk',sans-serif">`;
+
+  // Draw edges first (behind nodes)
+  allEdges.forEach(([a, b]) => {
+    // Line from bottom of parent ellipse to top of child ellipse
+    const ax = a.x, ay = a.y + RY;
+    const bx = b.x, by = b.y - RY;
+    svg += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>`;
+  });
+
+  // Arrowhead marker
+  svg = `<svg width="${totalW}" height="${svgH}" viewBox="0 0 ${totalW} ${svgH}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#555"/>
+    </marker>
+  </defs>`;
+
+  // Redraw edges after adding defs
+  allEdges.forEach(([a, b]) => {
+    const ax = a.x, ay = a.y + RY;
+    const bx = b.x, by = b.y - RY;
+    svg += `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>`;
+  });
+
+  // Draw ellipse nodes
+  allNodes.forEach(n => {
+    const s = nodeStyle(n.kind);
+    svg += `<ellipse cx="${n.x}" cy="${n.y}" rx="${RX}" ry="${RY}" fill="${s.fill}" stroke="${s.stroke}" stroke-width="1.5"/>`;
+    svg += `<text x="${n.x}" y="${n.y}" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="${s.text}">${n.label}</text>`;
+  });
+
+  svg += '</svg>';
+  return svg;
+}
+
+function renderAnnotatedTree(annotated) {
+  let lines = '';
+  for (const stmt of annotated) {
+    lines += `<div class="annotated-line">
+      <span class="at-node">assign</span>
+      <span class="at-type">${stmt.resolvedType}</span>
+    </div>`;
+    lines += `<div class="annotated-line" style="padding-left:24px">
+      <span class="at-indent">├─ </span>
+      <span class="at-node" style="color:var(--green)">${stmt.name}</span>
+      <span class="at-type">${stmt.resolvedType}</span>
+    </div>`;
+    lines += renderExprTree(stmt.expr, 1, true);
+  }
+  return lines;
+}
+
+function renderExprTree(node, depth, isLast) {
+  const indent = '   '.repeat(depth);
+  const branch = isLast ? '└─ ' : '├─ ';
+  if (node.kind === 'num') return `<div class="annotated-line" style="padding-left:${depth*24}px">
+    <span class="at-indent">${branch}</span>
+    <span class="at-node" style="color:var(--amber)">${node.value}</span>
+    <span class="at-type">${String(node.value).includes('.') ? 'FLOAT' : 'INT'}</span>
+  </div>`;
+  if (node.kind === 'id') return `<div class="annotated-line" style="padding-left:${depth*24}px">
+    <span class="at-indent">${branch}</span>
+    <span class="at-node" style="color:var(--green)">${node.name}</span>
+    <span class="at-type">ID</span>
+  </div>`;
+  if (node.kind === 'binop') {
+    let s = `<div class="annotated-line" style="padding-left:${depth*24}px">
+      <span class="at-indent">${branch}</span>
+      <span class="at-node" style="color:var(--pink)">${node.op}</span>
+      <span class="at-type">BINOP</span>
+    </div>`;
+    s += renderExprTree(node.left, depth + 1, false);
+    s += renderExprTree(node.right, depth + 1, true);
+    return s;
+  }
+  return '';
+}
+
+function renderTAC(tac) {
+  return tac.map((instr, i) => {
+    let code;
+    if (instr.op === '=' && !instr.arg2) {
+      code = `<span class="tmp">${instr.result}</span> <span class="op">:=</span> <span class="num">${instr.arg1}</span>`;
+    } else if (instr.op === '=') {
+      code = `<span class="id">${instr.result}</span> <span class="op">:=</span> ${instr.arg1}`;
+    } else {
+      const a1 = instr.arg1.match(/^t\d+$/) ? `<span class="tmp">${instr.arg1}</span>` : `<span class="num">${instr.arg1}</span>`;
+      const a2 = instr.arg2.match(/^t\d+$/) ? `<span class="tmp">${instr.arg2}</span>` : `<span class="num">${instr.arg2}</span>`;
+      code = `<span class="tmp">${instr.result}</span> <span class="op">:=</span> ${a1} <span class="op">${instr.op}</span> ${a2}`;
+    }
+    return `<div class="code-line"><span class="line-num">${String(i+1).padStart(2,'0')}</span><span class="line-code">${code}</span></div>`;
+  }).join('');
+}
+
+function renderTriples(tac) {
+  // Triple format: (index) | op | arg1 | arg2
+  const rows = tac.map((instr, i) => {
+    const op   = instr.op === '=' && !instr.arg2 ? ':=' : instr.op === '=' ? ':=' : instr.op;
+    const arg1 = instr.arg1 !== null && instr.arg1 !== undefined ? instr.arg1 : '_';
+    const arg2 = instr.arg2 !== null && instr.arg2 !== undefined ? instr.arg2 : '_';
+    return [
+      `<span style="color:var(--text3);font-family:var(--mono)">(${i})</span>`,
+      `<span class="tok-op" style="font-family:var(--mono)">${op}</span>`,
+      `<span style="color:${arg1.match(/^t\d+$/) ? 'var(--pink)' : 'var(--green)'}; font-family:var(--mono)">${arg1}</span>`,
+      `<span style="color:${typeof arg2 === 'string' && arg2.match(/^t\d+$/) ? 'var(--pink)' : 'var(--amber)'}; font-family:var(--mono)">${arg2}</span>`
+    ];
+  });
+  return renderTable(['Index', 'Op', 'Arg1', 'Arg2'], rows);
+}
+
+function renderIndirectTriples(tac) {
+  // Indirect triple = two tables side by side in one wrapper:
+  // Statement table: (idx) → pointer
+  // Triple table: (idx) | op | arg1 | arg2  (same as triple)
+  const stmtRows = tac.map((_, i) => [
+    `<span style="color:var(--text3);font-family:var(--mono)">[${i}]</span>`,
+    `<span style="color:var(--accent);font-family:var(--mono)">→ (${i})</span>`
+  ]);
+  const tripleRows = tac.map((instr, i) => {
+    const op   = instr.op === '=' && !instr.arg2 ? ':=' : instr.op === '=' ? ':=' : instr.op;
+    const arg1 = instr.arg1 !== null && instr.arg1 !== undefined ? instr.arg1 : '_';
+    const arg2 = instr.arg2 !== null && instr.arg2 !== undefined ? instr.arg2 : '_';
+    return [
+      `<span style="color:var(--text3);font-family:var(--mono)">(${i})</span>`,
+      `<span class="tok-op" style="font-family:var(--mono)">${op}</span>`,
+      `<span style="color:${arg1.match(/^t\d+$/) ? 'var(--pink)' : 'var(--green)'}; font-family:var(--mono)">${arg1}</span>`,
+      `<span style="color:${typeof arg2 === 'string' && arg2.match(/^t\d+$/) ? 'var(--pink)' : 'var(--amber)'}; font-family:var(--mono)">${arg2}</span>`
+    ];
+  });
+  return `
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:start">
+      <div>
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Statement Table</div>
+        ${renderTable(['Stmt #', 'Pointer'], stmtRows)}
+      </div>
+      <div>
+        <div style="font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Triple Table</div>
+        ${renderTable(['Index', 'Op', 'Arg1', 'Arg2'], tripleRows)}
+      </div>
+    </div>`;
+}
+
+function renderQuadruples(tac) {
+  // Quadruple format: (index) | op | arg1 | arg2 | result
+  const rows = tac.map((instr, i) => {
+    const op     = instr.op === '=' && !instr.arg2 ? ':=' : instr.op === '=' ? ':=' : instr.op;
+    const arg1   = instr.arg1 !== null && instr.arg1 !== undefined ? instr.arg1 : '_';
+    const arg2   = instr.arg2 !== null && instr.arg2 !== undefined ? instr.arg2 : '_';
+    const result = instr.result || '_';
+    return [
+      `<span style="color:var(--text3);font-family:var(--mono)">(${i})</span>`,
+      `<span class="tok-op" style="font-family:var(--mono)">${op}</span>`,
+      `<span style="color:${arg1.match(/^t\d+$/) ? 'var(--pink)' : 'var(--green)'}; font-family:var(--mono)">${arg1}</span>`,
+      `<span style="color:${typeof arg2 === 'string' && arg2.match(/^t\d+$/) ? 'var(--pink)' : 'var(--amber)'}; font-family:var(--mono)">${arg2}</span>`,
+      `<span style="color:${result.match(/^t\d+$/) ? 'var(--pink)' : 'var(--green)'}; font-family:var(--mono)">${result}</span>`
+    ];
+  });
+  return renderTable(['Index', 'Op', 'Arg1', 'Arg2', 'Result'], rows);
+}
+
+
+function renderTargetCode(instructions) {
+  return instructions.map((instr, i) => {
+    const dest = `<span class="reg">${instr.dest}</span>`;
+    const src = String(instr.src).match(/^R\d+$/) ? `<span class="reg">${instr.src}</span>` : `<span class="num">${instr.src}</span>`;
+    const cmt = `<span class="cmt">  ; ${instr.comment}</span>`;
+    return `<div class="code-line"><span class="line-num">${String(i+1).padStart(2,'0')}</span><span class="line-code"><span class="kw">${instr.op.padEnd(5)}</span>  ${dest}, ${src}${cmt}</span></div>`;
+  }).join('');
+}
+
+// ============================================================
+//  MAIN COMPILE FUNCTION
+// ============================================================
+let currentPhase = 0;
+let compiled = false;
+
+function runCompiler() {
+  const src = document.getElementById('code-input').value.trim();
+  if (!src) return;
+
+  document.getElementById('welcome').style.display = 'none';
+
+  // PHASE 1: LEXICAL
+  const tokens = tokenize(src);
+  const visibleToks = tokens.filter(t => t.type !== 'NEWLINE');
+
+  // Token table
+  const tokRows = visibleToks.map(t => {
+    const displayName = TOKEN_DISPLAY_MAP[t.type] || t.type;
+    const cls = tokenClass(t.type);
+    // Lexeme colouring: use the same class so it's visually consistent
+    const lexCls = cls;
+    return [
+      `<span class="${cls}">${displayName}</span>`,
+      `<span class="${lexCls}" style="font-family:var(--mono)">${t.value}</span>`,
+      `<span style="color:var(--text3)">${t.line}</span>`,
+      `<span style="color:var(--text3)">${t.col}</span>`
+    ];
+  });
+  document.getElementById('p1-tokens').innerHTML = renderTable(['Token Type','Lexeme','Line','Col'], tokRows);
+
+  // Symbol table (lexical — user-defined identifiers only, keywords in separate section)
+  const seenIds = {};
+  visibleToks.filter(t => t.type === 'ID').forEach(t => {
+    if (!seenIds[t.value]) seenIds[t.value] = {
+      token: 'ID', scope: 'Global',
+      address: `0x${Object.keys(seenIds).length.toString(16).padStart(4,'0').toUpperCase()}`
+    };
+  });
+  const seenKws = {};
+  visibleToks.filter(t => t.type === 'KEYWORD').forEach(t => {
+    if (!seenKws[t.value]) seenKws[t.value] = { count: 0 };
+    seenKws[t.value].count++;
+  });
+  const lexSymRows = Object.entries(seenIds).map(([name, s]) => [
+    `<span class="tok-id">${name}</span>`,
+    `<span style="color:var(--accent2)">IDENTIFIER</span>`,
+    `<span style="color:var(--text3)">—</span>`,
+    `<span style="color:var(--text3)">${s.scope}</span>`,
+    `<span style="color:var(--amber)">${s.address}</span>`
+  ]);
+  // Keyword summary rows appended
+  Object.keys(seenKws).forEach(kw => {
+    lexSymRows.push([
+      `<span class="tok-kw">${kw}</span>`,
+      `<span style="color:var(--accent2)">KEYWORD</span>`,
+      `<span style="color:var(--text3)">—</span>`,
+      `<span style="color:var(--text3)">Built-in</span>`,
+      `<span style="color:var(--text3)">—</span>`
+    ]);
+  });
+  document.getElementById('p1-symtable').innerHTML = renderTable(['Name','Token','Type','Scope','Address'], lexSymRows.length ? lexSymRows : [['—','—','—','—','—']]);
+
+  // PHASE 2: SYNTAX
+  const parser = new Parser(tokens);
+  const stmts = parser.parseAll();
+
+  // Detect complex C code: many keywords but few parsed assignments
+  const kwCount = visibleToks.filter(t => t.type === 'KEYWORD').length;
+  const isComplexC = kwCount >= 3;
+
+  const grammars = [
+    { nt: 'program',    prod: 'statement*' },
+    { nt: 'statement',  prod: 'ID EQUALS expression' },
+    { nt: 'expression', prod: 'expression (+ | - | * | /) expression' },
+    { nt: 'expression', prod: '( expression )' },
+    { nt: 'expression', prod: 'ID' },
+    { nt: 'expression', prod: 'NUMBER' },
+    { nt: 'expression', prod: 'FLOAT_NUM' },
+  ];
+  let grammarHtml = grammars.map(g =>
+    `<div class="grammar-rule"><span class="nt">${g.nt}</span><span class="arrow">→</span><span class="prod">${g.prod}</span></div>`
+  ).join('');
+  if (isComplexC) {
+    grammarHtml += `<div style="margin-top:12px;padding:10px 14px;border:1px solid rgba(37,99,235,0.25);border-radius:6px;font-size:12px;font-family:var(--mono);color:var(--text2);background:rgba(37,99,235,0.04)">
+      ℹ️ Complex C code detected. This visualizer uses a simplified expression parser — it extracts plain assignment statements (x = expr) for Phases 2–6. C constructs like declarations, for/if/while, printf/scanf, and function definitions are fully tokenised in Phase 1 but are not traversed in the parse tree below.
+    </div>`;
+  }
+  document.getElementById('p2-grammar').innerHTML = grammarHtml;
+  document.getElementById('p2-tree').innerHTML = drawParseTree(stmts);
+
+  // PHASE 3: SEMANTIC
+  const sem = semanticAnalysis(stmts);
+
+  // Before symtable (just names + token)
+  const beforeRows = Object.entries(seenIds).map(([name, s]) => [
+    `<span class="tok-id">${name}</span>`,
+    `<span style="color:var(--text3)">—</span>`,
+    `<span style="color:var(--text3)">Global</span>`,
+    `<span style="color:var(--amber)">${s.address}</span>`
+  ]);
+  document.getElementById('p3-symtable-before').innerHTML = renderTable(['Name','Type','Scope','Address'], beforeRows);
+
+  // Checks
+  document.getElementById('p3-checks').innerHTML = Object.entries(sem.checks).map(([check, result]) => {
+    const cls = result ? 'pass' : 'fail';
+    const label = result ? '✔ PASS' : '✘ FAIL';
+    return `<div class="check-row"><span class="check-label">${check}</span><span class="check-result ${cls}">${label}</span></div>`;
+  }).join('') + (sem.errors.length ? `<div style="margin-top:12px;padding:10px 14px;border:1px solid rgba(245,90,90,0.3);border-radius:6px;font-size:12px;font-family:var(--mono);color:var(--red)">${sem.errors.join('<br>')}</div>` : '');
+
+  // After symtable
+  const afterRows = Object.entries(sem.symTable).map(([name, s]) => {
+    const tc = s.type === 'INT' ? 'type-int' : 'type-float';
+    return [
+      `<span class="tok-id">${name}</span>`,
+      `<span class="${tc}">${s.type}</span>`,
+      `<span style="color:var(--text3)">Global</span>`,
+      `<span style="color:var(--text3)">${s.type === 'INT' ? '4' : '8'}</span>`,
+      `<span style="color:var(--amber)">${s.address}</span>`
+    ];
+  });
+  document.getElementById('p3-symtable-after').innerHTML = renderTable(['Name','Type','Scope','Width (bytes)','Address'], afterRows);
+  document.getElementById('p3-annotated').innerHTML = renderAnnotatedTree(sem.annotated);
+
+  // PHASE 4: ICG
+  const icg = generateICG(stmts);
+  document.getElementById('p4-tac').innerHTML = renderTAC(icg.tac);
+  document.getElementById('p4-triple').innerHTML = renderTriples(icg.tac);
+  document.getElementById('p4-indirect-triple').innerHTML = renderIndirectTriples(icg.tac);
+  document.getElementById('p4-quadruple').innerHTML = renderQuadruples(icg.tac);
+
+  const tempRows = Object.keys(icg.temps).map(t => {
+    const instr = icg.tac.find(i => i.result === t);
+    return [
+      `<span class="tmp">${t}</span>`,
+      `<span style="color:var(--text3)">INT</span>`,
+      `<span style="color:var(--text3)">Local/Temp</span>`,
+      `<span style="color:var(--amber)">0x${(Object.keys(icg.temps).indexOf(t) * 4 + 0x100).toString(16).toUpperCase()}</span>`,
+      instr ? `<span style="color:var(--text2)">${instr.arg1}${instr.arg2 ? ' '+instr.op+' '+instr.arg2 : ''}</span>` : '—'
+    ];
+  });
+  document.getElementById('p4-temps').innerHTML = renderTable(['Temp Var','Type','Scope','Address','Assigned From'], tempRows.length ? tempRows : [['—','—','—','—','—']]);
+
+  const icgSymRows = [...Object.entries(sem.symTable), ...Object.keys(icg.temps).map(t => [t, {type:'INT',scope:'Temp',address:`0x${(Object.keys(icg.temps).indexOf(t)*4+0x100).toString(16).toUpperCase()}`}])]
+    .map(([name, s]) => [
+      `<span style="color:${name.startsWith('t')? 'var(--pink)':'var(--green)'}">${name}</span>`,
+      `<span class="${s.type==='INT'?'type-int':'type-float'}">${s.type}</span>`,
+      `<span style="color:var(--text3)">${s.scope}</span>`,
+      `<span style="color:var(--amber)">${s.address}</span>`
+    ]);
+  document.getElementById('p4-symtable').innerHTML = renderTable(['Name','Type','Scope','Address'], icgSymRows);
+
+  // PHASE 5: OPTIMIZATION
+  const opt = optimize(icg.tac);
+  const origCount = icg.tac.length;
+  const newCount = opt.optimized.length;
+  const saved = origCount - newCount;
+
+  document.getElementById('p5-stats').innerHTML = [
+    { label: 'Original instructions', val: origCount },
+    { label: 'After optimization', val: newCount },
+    { label: 'Eliminated', val: saved },
+    { label: 'Reduction', val: origCount ? Math.round((saved/origCount)*100)+'%' : '0%' }
+  ].map(s => `<div class="info-card"><div class="info-card-label">${s.label}</div><div class="info-card-value">${s.val}</div></div>`).join('');
+
+  // Build diff view
+  const tacStrs = icg.tac.map(i => i.op==='='&&!i.arg2?`${i.result} := ${i.arg1}`:`${i.result} := ${i.arg1} ${i.op} ${i.arg2}`);
+  const optStrs = opt.optimized.map(i => i.op==='='&&!i.arg2?`${i.result} := ${i.arg1}`:`${i.result} := ${i.arg1} ${i.op} ${i.arg2}`);
+  const eliminated = opt.log.filter(l => l.type === 'copy').map(l => l.from.split(' ')[0]);
+  let diffHtml = '';
+  tacStrs.forEach((line, i) => {
+    const name = line.split(' ')[0];
+    const logEntry = opt.log.find(l => l.from.startsWith(name + ' '));
+    if (logEntry && logEntry.type === 'copy') {
+      diffHtml += `<div class="code-line"><span class="line-num">${String(i+1).padStart(2,'0')}</span><span class="line-code opt-before">${line} <span class="opt-note">← copy eliminated</span></span></div>`;
+    } else if (logEntry && logEntry.type === 'fold') {
+      diffHtml += `<div class="code-line"><span class="line-num">${String(i+1).padStart(2,'0')}</span><span class="line-code opt-before">${line}</span></div>`;
+      diffHtml += `<div class="code-line"><span class="line-num">  </span><span class="line-code opt-after">→ ${logEntry.to} <span class="opt-note">← constant folded</span></span></div>`;
+    } else {
+      diffHtml += `<div class="code-line"><span class="line-num">${String(i+1).padStart(2,'0')}</span><span class="line-code opt-unchanged">${line}</span></div>`;
+    }
+  });
+  document.getElementById('p5-diff').innerHTML = diffHtml;
+
+  const optSymRows = Object.entries(sem.symTable).map(([name, s]) => [
+    `<span class="tok-id">${name}</span>`,
+    `<span class="${s.type==='INT'?'type-int':'type-float'}">${s.type}</span>`,
+    `<span style="color:var(--text3)">Global</span>`,
+    `<span style="color:var(--amber)">${s.address}</span>`
+  ]);
+  document.getElementById('p5-symtable').innerHTML = renderTable(['Name','Type','Scope','Address'], optSymRows);
+
+  // PHASE 6: TARGET
+  const target = generateTarget(opt.optimized);
+  document.getElementById('p6-code').innerHTML = renderTargetCode(target);
+
+  const phaseColors = ['var(--phase1)','var(--phase2)','var(--phase3)','var(--phase4)','var(--phase5)','var(--phase6)'];
+  const errorTableData = [
+    ['Lexical Analysis', 'Illegal character / unknown token', `<span class="error-example">@ # $</span>`, `<span class="error-fix">Remove or replace invalid character</span>`],
+    ['Syntax Analysis', 'Missing operator or mismatched tokens', `<span class="error-example">a = + b</span>`, `<span class="error-fix">Check expression structure</span>`],
+    ['Semantic Analysis', 'Undeclared variable used', `<span class="error-example">c = x + 1</span> (x not defined)`, `<span class="error-fix">Declare variable before use</span>`],
+    ['Intermediate Code', 'Overflow in temp variable count', `<span class="error-example">100+ nested ops</span>`, `<span class="error-fix">Break into smaller expressions</span>`],
+    ['Code Optimization', 'Division by zero constant', `<span class="error-example">x = a / 0</span>`, `<span class="error-fix">Fix the divisor</span>`],
+    ['Target Code', 'Register spill / insufficient regs', `<span class="error-example">Too many live vars</span>`, `<span class="error-fix">Optimize scope / reduce live range</span>`],
+  ];
+  document.getElementById('p6-errors').innerHTML = renderTable(
+    ['Compiler Phase','Error Type','Example','Correction'],
+    errorTableData.map(r => [`<span class="error-type">${r[0]}</span>`, r[1], r[2], r[3]])
+  );
+
+  // Highlight actual errors if any
+  if (sem.errors.length) {
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'margin-top:12px;padding:12px 16px;border:1px solid rgba(245,90,90,0.3);background:rgba(245,90,90,0.05);border-radius:6px;font-size:13px;font-family:var(--mono);color:var(--red)';
+    errDiv.innerHTML = '⚠ Errors detected:<br>' + sem.errors.map(e => `  • ${e}`).join('<br>');
+    document.getElementById('p6-errors').appendChild(errDiv);
+  }
+
+  compiled = true;
+  // Mark all as done
+  for (let i = 1; i <= 6; i++) {
+    document.getElementById(`nav-${i}`).classList.add('done');
+    document.getElementById(`nav-${i}`).classList.remove('active');
+  }
+  showPhase(1);
+}
+
+function showPhase(n) {
+  if (!compiled && n > 0) return;
+  for (let i = 1; i <= 6; i++) {
+    document.getElementById(`phase-${i}`).classList.remove('active');
+    document.getElementById(`nav-${i}`).classList.remove('active');
+  }
+  document.getElementById(`phase-${n}`).classList.add('active');
+  document.getElementById(`nav-${n}`).classList.add('active');
+  document.getElementById('right-panel').scrollTop = 0;
+  currentPhase = n;
+}
+
+// Run on load with sample code
+window.addEventListener('load', () => {
+  setTimeout(runCompiler, 200);
+});
+</script>
+</body>
+</html>
